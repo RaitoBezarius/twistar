@@ -6,6 +6,7 @@ from twistar import utils
 from twistar.registry import Registry
 
 from utils import *
+from collections import OrderedDict
 
 class UtilsTest(unittest.TestCase):
 
@@ -58,35 +59,29 @@ class UtilsTest(unittest.TestCase):
     def test_dictToWhere(self):
         self.assertEqual(utils.dictToWhere({}), None)
 
-        def validGeneratedWhere(a, b, joiner='AND'):
-            wheres_a = a[0].split(joiner).sort()
-            wheres_b = b[0].split(joiner).sort()
+        result = utils.dictToWhere(OrderedDict([('one', 'two')]), "BLAH")
+        self.assertEqual(result, ["(one = ?)", "two"])
 
-            return wheres_a == wheres_b and a[1:] == b[1:]
+        result = utils.dictToWhere(OrderedDict([('one', None) ]), "BLAH")
+        self.assertEqual(result, ["(one is ?)", None])
 
-        result = utils.dictToWhere({ 'one': 'two' }, "BLAH")
-        self.assertTrue(validGeneratedWhere(result, ["(one = ?)", "two"]))
+        result = utils.dictToWhere(OrderedDict([('one', 'two'), ('three', 'four')]))
+        self.assertEqual(result, ["(one = ?) AND (three = ?)", "two", "four"])
 
-        result = utils.dictToWhere({ 'one': None }, "BLAH")
-        self.assertTrue(validGeneratedWhere(result, ["(one is ?)", None]))
+        result = utils.dictToWhere(OrderedDict([('one', 'two'), ('three', 'four'), ('five', 'six')]), "BLAH")
+        self.assertEqual(result, ["(one = ?) BLAH (three = ?) BLAH (five = ?)", "two", "four", "six"])
 
-        result = utils.dictToWhere({ 'one': 'two', 'three': 'four' })
-        self.assertTrue(validGeneratedWhere(result, ["(three = ?) AND (one = ?)", "four", "two"]))
+        result = utils.dictToWhere(OrderedDict([('one', 'two'), ('three', None)]))
+        self.assertEqual(result, ["(one = ?) AND (three is ?)", "two", None])
 
-        result = utils.dictToWhere({ 'one': 'two', 'three': 'four', 'five': 'six' }, "BLAH")
-        self.assertTrue(validGeneratedWhere(result, ["(five = ?) BLAH (three = ?) BLAH (one = ?)", "six", "four", "two"]))
+        result = utils.dictToWhere(OrderedDict([('id', [1, 2, 3]), ('age', slice(1, 18))]))
+        self.assertEqual(result, ["(id IN (?, ?, ?)) AND (age BETWEEN ? AND ?)", 1, 2, 3, 1, 18])
 
-        result = utils.dictToWhere({ 'one': 'two', 'three': None })
-        self.assertTrue(validGeneratedWhere(result, ["(three is ?) AND (one = ?)", None, "two"]))
+        result = utils.dictToWhere(OrderedDict([('id', [1, 2]), ('age', utils.RawQuery("age > ?", 1))]))
+        self.assertEqual(result, ["(id IN (?, ?)) AND (age > ?)", 1, 2, 1])
 
-        result = utils.dictToWhere({'id': [1, 2, 3], 'age': slice(1, 18)})
-        self.assertTrue(validGeneratedWhere(result, ["(age BETWEEN ? AND ?) AND (id IN (?, ?, ?))", 1, 18, 1, 2, 3]))
-
-        result = utils.dictToWhere({'id': [1, 2], 'age': utils.RawQuery("age > ?", 1)})
-        self.assertTrue(validGeneratedWhere(result, ["(age > ?) AND (id IN (?, ?))", 1, 1, 2]))
-
-        result = utils.dictToWhere({'first_name': "First", 'last_name': "Last", 'age': 11})
-        self.assertTrue(validGeneratedWhere(result, ["(first_name = ?) AND (last_name = ?) AND (age = ?)", "First", "Last", 11]))
+        result = utils.dictToWhere(OrderedDict([('first_name', "First"), ('last_name', "Last"), ('age', 11)]))
+        self.assertEqual(result, ["(first_name = ?) AND (last_name = ?) AND (age = ?)", "First", "Last", 11])
 
 
     @inlineCallbacks
