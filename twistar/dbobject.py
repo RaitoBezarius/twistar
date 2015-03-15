@@ -159,8 +159,9 @@ class DBObject(Validator):
 
     def afterInit(self):
         """
-        Method called when a new L{DBObject} is instantiated as a result of DB queries. If you
-        create an instance of this class on your own, you will need to call the method yourself.
+        Method called when a new L{DBObject} is instantiated as a result of DB queries or when you
+        create an instance of this using create. If you create an instance of this class on your
+        own, you will need to call the method yourself.
         Classes can overwrite this method.  This method may return a C{Deferred}.
         """
 
@@ -365,7 +366,7 @@ class DBObject(Validator):
 
     @classmethod
     def create(klass, **attrs):
-        return klass(**attrs).save()
+        return klass(**attrs).afterInit().save()
 
     @classmethod
     def findOrCreate(klass, **attrs):
