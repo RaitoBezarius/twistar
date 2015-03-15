@@ -176,6 +176,26 @@ class DBObjectTest(unittest.TestCase):
         for key, value in args.items():
             self.assertEqual(getattr(u, key), value)
 
+    @inlineCallbacks
+    def test_update_all(self):
+        users = []
+        for _ in range(3):
+            user = yield User(first_name="blahblah", last_name="children", age=60).save()
+            users.append(user)
+
+        ages = [12] * 3
+        yield User.updateAll(age=12, where=["age = ?", 60])
+        updated_users = yield User.findBy(age=12)
+        resultages = [user.age for user in updated_users]
+        self.assertEqual(resultages, ages)
+
+        n_user = yield User.count()
+        yield User.updateAll(age=8)
+        ages = [8] * n_user
+        resultages = [user.age for user in (yield User.all())]
+        self.assertEqual(resultages, ages)
+
+
 
     @inlineCallbacks
     def test_refresh(self):

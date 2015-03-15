@@ -475,6 +475,27 @@ class DBObject(Validator):
 
 
     @classmethod
+    def updateAll(klass, where=None, limit=None, **new_attrs):
+        """
+        Update all instances of C{klass} in the database without instantiating the records
+        first or invoking callbacks (L{beforeUpdate} is not called). This will run a single
+        SQL UPDATE statement in the database.
+        updateAll(first_name="blah", where=["first_name = ?", "b"])
+
+        @param new_attrs: New attributes which will replaces those from selected instances.
+
+        @param limit: Limit of selected instances matching the where (or not).
+
+        @param where: Conditionally update instances. The parameter is of the same form
+        found in L{find}.
+
+        @return: A {C}Deferred
+        """
+        config = Registry.getConfig()
+        tablename = klass.tablename()
+        return config.update(tablename, new_attrs, where=where, limit=limit)
+
+    @classmethod
     def exists(klass, where=None):
         """
         Find whether or not at least one instance of the given C{klass} exists, optionally
