@@ -58,29 +58,35 @@ class UtilsTest(unittest.TestCase):
     def test_dictToWhere(self):
         self.assertEqual(utils.dictToWhere({}), None)
 
+        def validGeneratedWhere(a, b, joiner='AND'):
+            wheres_a = a[0].split(joiner).sort()
+            wheres_b = b[0].split(joiner).sort()
+
+            return wheres_a == wheres_b and a[1:] == b[1:]
+
         result = utils.dictToWhere({ 'one': 'two' }, "BLAH")
-        self.assertEqual(result, ["(one = ?)", "two"])
+        self.assertTrue(validGeneratedWhere(result, ["(one = ?)", "two"]))
 
         result = utils.dictToWhere({ 'one': None }, "BLAH")
-        self.assertEqual(result, ["(one is ?)", None])
+        self.assertTrue(validGeneratedWhere(result, ["(one is ?)", None]))
 
         result = utils.dictToWhere({ 'one': 'two', 'three': 'four' })
-        self.assertEqual(result, ["(three = ?) AND (one = ?)", "four", "two"])
+        self.assertTrue(validGeneratedWhere(result, ["(three = ?) AND (one = ?)", "four", "two"]))
 
         result = utils.dictToWhere({ 'one': 'two', 'three': 'four', 'five': 'six' }, "BLAH")
-        self.assertEqual(result, ["(five = ?) BLAH (three = ?) BLAH (one = ?)", "six", "four", "two"])
+        self.assertTrue(validGeneratedWhere(result, ["(five = ?) BLAH (three = ?) BLAH (one = ?)", "six", "four", "two"]))
 
         result = utils.dictToWhere({ 'one': 'two', 'three': None })
-        self.assertEqual(result, ["(three is ?) AND (one = ?)", None, "two"])
+        self.assertTrue(validGeneratedWhere(result, ["(three is ?) AND (one = ?)", None, "two"]))
 
         result = utils.dictToWhere({'id': [1, 2, 3], 'age': slice(1, 18)})
-        self.assertEqual(result, ["(age BETWEEN ? AND ?) AND (id IN (?, ?, ?))", 1, 18, 1, 2, 3])
+        self.assertTrue(validGeneratedWhere(result, ["(age BETWEEN ? AND ?) AND (id IN (?, ?, ?))", 1, 18, 1, 2, 3]))
 
         result = utils.dictToWhere({'id': [1, 2], 'age': utils.RawQuery("age > ?", 1)})
-        self.assertEqual(result, ["(age > ?) AND (id IN (?, ?))", 1, 1, 2])
+        self.assertTrue(validGeneratedWhere(result, ["(age > ?) AND (id IN (?, ?))", 1, 1, 2]))
 
         result = utils.dictToWhere({'first_name': "First", 'last_name': "Last", 'age': 11})
-        self.assertEqual(result, ["(first_name = ?) AND (last_name = ?) AND (age = ?)", "First", "Last", 11])
+        self.assertTrue(validGeneratedWhere(result, ["(first_name = ?) AND (last_name = ?) AND (age = ?)", "First", "Last", 11]))
 
 
     @inlineCallbacks
