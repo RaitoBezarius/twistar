@@ -8,7 +8,7 @@ from twistar.registry import Registry
 from utils import *
 
 class UtilsTest(unittest.TestCase):
-    
+
     @inlineCallbacks
     def setUp(self):
         yield initDB(self)
@@ -18,7 +18,7 @@ class UtilsTest(unittest.TestCase):
     @inlineCallbacks
     def test_joinWheres_precedence(self):
         yield User(first_name="Second").save()
-        
+
         first = ['first_name = ?', "First"]
         last = ['last_name = ?', "Last"]
         second = ['first_name = ?', "Second"]
@@ -33,7 +33,7 @@ class UtilsTest(unittest.TestCase):
     def test_joinMultipleWheres_empty_arg(self):
         where = utils.joinMultipleWheres([], joiner='AND')
         self.assertEqual(where, [])
-    
+
 
     def test_joinMultipleWheres_single_where(self):
         where = ['first_name = ?', "First"]
@@ -72,6 +72,15 @@ class UtilsTest(unittest.TestCase):
 
         result = utils.dictToWhere({ 'one': 'two', 'three': None })
         self.assertEqual(result, ["(three is ?) AND (one = ?)", None, "two"])
+
+        result = utils.dictToWhere({'id': [1, 2, 3], 'age': slice(1, 18)})
+        self.assertEqual(result, ["(age BETWEEN ? AND ?) AND (id IN (?, ?, ?))", 1, 18, 1, 2, 3])
+
+        result = utils.dictToWhere({'id': [1, 2], 'age': utils.RawQuery("age > ?", 1)})
+        self.assertEqual(result, ["(age > ?) AND (id IN (?, ?))", 1, 1, 2])
+
+        result = utils.dictToWhere({'first_name': "First", 'last_name': "Last", 'age': 11})
+        self.assertEqual(result, ["(first_name = ?) AND (last_name = ?) AND (age = ?)", "First", "Last", 11])
 
 
     @inlineCallbacks

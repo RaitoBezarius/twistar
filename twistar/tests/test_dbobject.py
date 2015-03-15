@@ -4,22 +4,23 @@ from twisted.internet.defer import inlineCallbacks
 
 from twistar.exceptions import ImaginaryTableError
 from twistar.registry import Registry
+from twistar.utils import RawQuery
 
 from utils import *
 
 class DBObjectTest(unittest.TestCase):
-    
+
     @inlineCallbacks
     def setUp(self):
         yield initDB(self)
         self.user = yield User(first_name="First", last_name="Last", age=10).save()
         self.avatar = yield Avatar(name="an avatar name", user_id=self.user.id).save()
-        self.picture = yield Picture(name="a pic", size=10, user_id=self.user.id).save()        
+        self.picture = yield Picture(name="a pic", size=10, user_id=self.user.id).save()
 
 
     @inlineCallbacks
     def tearDown(self):
-        yield tearDownDB(self)        
+        yield tearDownDB(self)
 
 
     @inlineCallbacks
@@ -28,6 +29,24 @@ class DBObjectTest(unittest.TestCase):
         self.assertEqual(r, [])
 
         r = yield User.findBy(first_name="First", last_name="Last", age=11)
+        self.assertEqual(r, [])
+
+        r = yield User.findBy(age=slice(1, 12))
+        self.assertEqual(r[0], self.user)
+
+        r = yield User.findBy(age=slice(1, 5))
+        self.assertEqual(r, [])
+
+        r = yield User.findBy(age=[1, 10, 13])
+        self.assertEqual(r[0], self.user)
+
+        r = yield User.findBy(age=[5, 6])
+        self.assertEqual(r, [])
+
+        r = yield User.findBy(age=RawQuery("age > ?", 9))
+        self.assertEqual(r[0], self.user)
+
+        r = yield User.findBy(age=RawQuery("age < ?", 9))
         self.assertEqual(r, [])
 
         r = yield User.findBy(first_name="First", last_name="Last", age=10)
@@ -58,13 +77,13 @@ class DBObjectTest(unittest.TestCase):
 
     @inlineCallbacks
     def test_creation(self):
-        # test creating blank object 
+        # test creating blank object
         u = yield User().save()
         self.assertTrue(type(u.id) == int or type(u.id) == long)
 
         # test creating object with props that don't correspond to columns
         u = yield User(a_fake_column="blech").save()
-        self.assertTrue(type(u.id) == int or type(u.id) == long)        
+        self.assertTrue(type(u.id) == int or type(u.id) == long)
 
         # Test table doesn't exist
         f = FakeObject(blah = "something")
@@ -75,7 +94,7 @@ class DBObjectTest(unittest.TestCase):
         u = yield User(**args).save()
         for key, value in args.items():
             self.assertEqual(getattr(u, key), value)
-        
+
 
     @inlineCallbacks
     def test_find(self):
@@ -120,7 +139,7 @@ class DBObjectTest(unittest.TestCase):
         results = yield User.count()
         self.assertEqual(4, results)
 
-    
+
     @inlineCallbacks
     def test_delete(self):
         u = yield User().save()
@@ -137,7 +156,7 @@ class DBObjectTest(unittest.TestCase):
         for _ in range(3):
             yield User(first_name="blah").save()
         yield User.deleteAll(["first_name = ?", "blah"])
-        users = yield User.all()        
+        users = yield User.all()
         resultids = [user.id for user in users]
         self.assertEqual(resultids, ids)
 
@@ -160,7 +179,6 @@ class DBObjectTest(unittest.TestCase):
 
     @inlineCallbacks
     def test_refresh(self):
-        dateklass = Registry.getDBAPIClass("Date")
         args = {'first_name': "a", "last_name": "b", "age": 10}
         u = yield User(**args).save()
 
@@ -168,10 +186,31 @@ class DBObjectTest(unittest.TestCase):
         u.first_name = "something different"
         u.last_name = "another thing"
         yield u.refresh()
-        
+
         for key, value in args.items():
             self.assertEqual(getattr(u, key), value)
 
+    @inlineCallbacks
+    def test_first(self):
+        u = yield User.first()
+        self.assertEqual(u.id, 1)
+
+        user = yield User(first_name='abc', last_name='abd', age=15).save()
+        _u = yield User.first(n=2)
+        self.assertEqual(_u[0].id, u.id)
+        self.assertEqual(_u[1].id, user.id)
+
+    @inlineCallbacks
+    def test_last(self):
+        user = yield User(first_name='abc', last_name='abd', age=15).save()
+
+        u = yield User.last()
+        self.assertEqual(u.id, user.id)
+
+        first_user = yield User.first()
+        users = yield User.last(n=2)
+        self.assertEqual(users[0].id, user.id)
+        self.assertEqual(users[1].id, first_user.id)
 
     @inlineCallbacks
     def test_validation(self):
@@ -192,7 +231,7 @@ class DBObjectTest(unittest.TestCase):
         yield first.save()
         self.assertEqual(len(first.errors), 0)
         User.clearValidations()
-        
+
 
     @inlineCallbacks
     def test_validation_function(self):
@@ -213,7 +252,7 @@ class DBObjectTest(unittest.TestCase):
         u = User(age=10)
         valid = yield u.isValid()
         self.assertEqual(valid, True)
-        User.clearValidations()        
+        User.clearValidations()
 
 
     @inlineCallbacks

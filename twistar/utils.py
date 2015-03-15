@@ -7,6 +7,11 @@ from twisted.internet import defer, threads, reactor
 from twistar.registry import Registry
 from twistar.exceptions import TransactionError
 
+class RawQuery(object):
+
+    def __init__(self, q, *values):
+        self.query = "(" + q + ")"
+        self.values = values
 
 def transaction(interaction):
     """
@@ -36,7 +41,7 @@ def createInstances(props, klass):
     """
     Create an instance of C{list} of instances of a given class
     using the given properties.
-    
+
     @param props: One of:
       1. A dict, in which case return an instance of klass
       2. A list of dicts, in which case return a list of klass instances
@@ -47,20 +52,26 @@ def createInstances(props, klass):
         ks = [klass(**prop) for prop in props]
         ds = [defer.maybeDeferred(k.afterInit) for k in ks]
         return defer.DeferredList(ds).addCallback(lambda _: ks)
-    
+
     if props is not None:
         k = klass(**props)
         return defer.maybeDeferred(k.afterInit).addCallback(lambda _: k)
 
     return defer.succeed(None)
 
-
 def dictToWhere(attrs, joiner="AND"):
     """
     Convert a dictionary of attribute: value to a where statement.
 
-    For instance, dictToWhere({'one': 'two', 'three': 'four'}) returns:
-    ['(one = ?) AND (three = ?)', 'two', 'four']
+    @param joiner: Optional param to join all conditions, default to AND.
+
+    Special cases:
+    When the value is a list: The comparator becomes "IN (list[0], list[1], list[2], ..., list[length - 1])"
+    When the value is a slice: The comparator becomes "BETWEEN start AND stop"
+    When the value is a RawQuery: No comparator is specified, and the query of the RawQuery is used (also his values).
+
+    For instance, dictToWhere({'one': 'two', 'three': 'four', 'five': [6, 7, 8], 'nine': slice(10, 20)}) returns:
+    ['(one = ?) AND (three = ?) AND (five IN (?, ?, ?)) AND (nine BETWEEN ? AND ?)', 'two', 'four', 6, 7, 8, 10, 20]
 
     @return: Expression above if len(attrs) > 0, None otherwise
     """
@@ -68,12 +79,26 @@ def dictToWhere(attrs, joiner="AND"):
         return None
 
     wheres = []
+    values = []
     for key, value in attrs.iteritems():
-        comparator = 'is' if value is None else '='
-        wheres.append("(%s %s ?)" % (key, comparator))
+        comparator = 'is ?' if value is None else '= ?'
+        if isinstance(value, list):
+            params = ', '.join(['?'] * len(value))
+            comparator = 'IN ({})'.format(params)
+            values += value
+        elif isinstance(value, slice):
+            comparator = 'BETWEEN ? AND ?'
+            values += [value.start, value.stop]
+        if isinstance(value, RawQuery):
+            values += value.values
+            wheres.append(value.query)
+        else:
+            if (not isinstance(value, list)) and (not isinstance(value, slice)):
+                values += [value]
 
-    return [(" %s " % joiner).join(wheres)] + attrs.values()
+            wheres.append("({field_name} {comparator})".format(field_name=key, comparator=comparator))
 
+    return [(" {joiner} ".format(joiner=joiner)).join(wheres)] + values
 
 def joinWheres(wone, wtwo, joiner="AND"):
     """
@@ -82,9 +107,9 @@ def joinWheres(wone, wtwo, joiner="AND"):
 
     @param wone: First where C{list}
 
-    @param wone: Second where C{list}
+    @param wtwo: Second where C{list}
 
-    @param joiner: Optional text for joining the two wheres.
+    @param joiner: Optional text for joining the two wheres. Default to AND.
 
     @return: A joined version of the two given wheres.
     """
@@ -108,8 +133,7 @@ def joinMultipleWheres(wheres, joiner="AND"):
     if not wheres:
         return []
 
-    f = lambda x, y: joinWheres(x, y, joiner)
-    return reduce(f, wheres)
+    return reduce(lambda x, y: joinWheres(x, y, joiner), wheres)
 
 
 def deferredDict(d):
@@ -130,6 +154,6 @@ def deferredDict(d):
         for index in range(len(results)):
             rvalue[names[index]] = results[index][1]
         return rvalue
-    
+
     dl = defer.DeferredList(d.values())
     return dl.addCallback(handle, d.keys())
